@@ -226,21 +226,35 @@ env_patents_min,
 protected_areas,
 protected_areas_max,
 protected_areas_min,
-(protected_areas - protected_areas_min) / (protected_areas_max - protected_areas_min) AS protected_areas_index
+(protected_areas - protected_areas_min) / (protected_areas_max - protected_areas_min) AS protected_areas_index,
+(-(ap_mortality - ap_mort_min) / (ap_mort_max - ap_mort_min) * 0.2 + (elec_output - elec_output_min) / (elec_output_max - elec_output_min) * 0.4 + 
+(env_patents -env_patents_min) / (env_patents_max - env_patents_min) * 0.2 + (protected_areas - protected_areas_min) / (protected_areas_max - protected_areas_min) * 0.2) AS total_index
 FROM combination c
 LEFT JOIN min_max mm
 	ON c.year = mm.year
-    )
--- select * from final;
+    ),
 
--- get columns needed and add total index
+total_index_range AS 
+(
+SELECT year, 
+    MIN(total_index) AS total_index_min,
+    MAX(total_index) AS total_index_max 
+    FROM final
+		GROUP BY 1)
+        
+-- select * from total_index_range;
 SELECT location,
-	   year,
+	   f.year,
        ROUND(air_poll_mort_index,2) AS air_poll_mort_index,
        ROUND(elec_output_index,2) AS elec_output_index ,
        ROUND(env_patents_index,2) AS env_patents_index,
        ROUND(protected_areas_index,2) AS protected_areas_index,
-	   ROUND((air_poll_mort_index + elec_output_index + env_patents_index + protected_areas_index ) / 4 ,2) AS total_index
-FROM final;
+	   ROUND((total_index - total_index_min) / (total_index_max - total_index_min),2) AS total_index_norm
+FROM final f
+LEFT JOIN total_index_range tir
+	ON f.year = tir.year
+       
+
+;
 
     
