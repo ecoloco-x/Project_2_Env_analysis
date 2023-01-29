@@ -166,7 +166,8 @@ group by 1 order by 1;
 ######################################
 ############ BUILD QUERY #############
 ######################################
--- fir combine all tables without aggregation
+
+-- first combine all tables without aggregation
 WITH combination AS
 (
 SELECT ap.location, 
@@ -185,7 +186,7 @@ LEFT JOIN elec_output eo
 LEFT JOIN env_pol ep
 	ON ep.location = ap.location 
     AND ep.year = ap.year
-WHERE ap.location IN ('AUS' , 'CAN' , 'FRA' , 'DEU' , 'ITA' , 'JPN' , 'MEX' ,'KOR','GBR','USA')
+WHERE ap.location IN ('AUS' , 'CAN' , 'FRA' , 'DEU' , 'ITA' , 'JPN' , 'MEX' ,'KOR','GBR','USA') -- remove turkey from the list
 ORDER BY 2, 1
     ),
 
@@ -230,7 +231,7 @@ FROM combination c
 LEFT JOIN min_max mm
 	ON c.year = mm.year
     )
-    
+-- select * from final;
 
 -- get columns needed and add total index
 SELECT location,
