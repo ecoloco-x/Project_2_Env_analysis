@@ -4,7 +4,7 @@ USE project_2;
 # import raw tables from csv
 # inpect raw tables & prepare for clean up 
 SELECT * FROM air_pollution_raw;
-SELECT * FROM biodiversity_raw;
+SELECT * FROM protected_areas_raw;
 SELECT * FROM energy_raw;
 SELECT * FROM environmental_policy_raw;
 
@@ -28,7 +28,7 @@ ADD COLUMN country_code VARCHAR(255);
 
 UPDATE air_pollution_raw
 SET country_code =  CASE country
-			-- WHEN 'Argentina' THEN 'ARG'
+			WHEN 'Argentina' THEN 'ARG'
 			WHEN 'Australia' THEN 'AUS'
             -- when 'BRIICS economies - Brazil, Russia, India, Indonesia, China and South Africa' then 
             WHEN 'Canada' THEN 'CAN'
@@ -38,7 +38,7 @@ SET country_code =  CASE country
             WHEN 'Japan' THEN 'JPN'
             WHEN 'Mexico' THEN 'MEX'
             WHEN 'Korea' THEN 'KOR'
-            -- WHEN 'Russia' THEN 'RUS'
+			WHEN 'Russia' THEN 'RUS'
             WHEN 'T?kiye' THEN 'TUR'
             WHEN 'United Kingdom' THEN 'GBR'
             WHEN 'United States' THEN 'USA'
@@ -87,28 +87,16 @@ ALTER TABLE air_pollution
 MODIFY mortality_rate DOUBLE;
 
 
-##### VEGETATION GAIN / LOSS TABLE #####
+##### PROTECTED AREAS TABLE #####
 
-DROP TABLE vege_gain;
-CREATE TABLE IF NOT EXISTS vege_gain
-SELECT LOCATION AS location,
-	   TIME AS year,
+DROP TABLE protected_areas;
+CREATE TABLE IF NOT EXISTS protected_areas
+SELECT COU AS location,
+	   Year AS year,
        Value AS value
-FROM biodiversity_raw
-WHERE (TIME = 2019)
-AND location IN ('AUS' , 'CAN' , 'FRA' , 'DEU' , 'ITA' , 'JPN' , 'MEX' ,'KOR','TUR','GBR','USA')
-AND subject = 'VEGEGAIN2004';
-
-
-DROP TABLE vege_loss;
-CREATE TABLE IF NOT EXISTS vege_loss
-SELECT LOCATION AS location,
-	   TIME AS year,
-       Value AS value
-FROM biodiversity_raw
-WHERE (TIME = 2019)
-AND location IN ('AUS' , 'CAN' , 'FRA' , 'DEU' , 'ITA' , 'JPN' , 'MEX' ,'KOR','TUR','GBR','USA')
-AND subject = 'VEGELOSS2004';
+FROM protected_areas_raw
+WHERE year >= 2005 and year <= 2015
+AND COU IN ('AUS' , 'CAN' , 'FRA' , 'DEU' , 'ITA' , 'JPN' , 'MEX' ,'KOR','TUR','GBR','USA');
 
 
 ##### ENERGY TABLE #####
@@ -170,12 +158,10 @@ select location, count(*) from elec_output
 group by 1 order by 1;
 select location, count(*) from env_pol
 group by 1 order by 1;
-select * from vege_gain order by 1; 
-select * from vege_loss order by 1;
-# for air_pollution, elec_output, env_pol we have data of 11 countries throughout 11 years
-# for two vege tables , only yearly record for each of the 11 countries
+select location, count(*) from protected_areas
+group by 1 order by 1;
 
-
+# since we have no data in protected_areas for Turkey, we will be analyzing 10 G20 countries during 2005 - 2015
 
 ######################################
 ############ BUILD QUERY #############
@@ -185,23 +171,22 @@ WITH combination AS
 (
 SELECT ap.location, 
 	   ap.year,
-       COALESCE(ap.mortality_rate,0) AS ap_mortality,
-	   COALESCE(eo.value,0) AS elec_output,
-	   COALESCE(vg.value,0) AS vege_gain,
-	   COALESCE(vl.value,0) AS vege_loss,
-       COALESCE(ep.value,0) AS env_patents
+       ap.mortality_rate AS ap_mortality,
+	   eo.value AS elec_output,
+	   pa.value AS protected_areas,
+       ep.value AS env_patents
 FROM air_pollution ap
-LEFT JOIN vege_gain vg
-	ON ap.location = vg.location 
-LEFT JOIN vege_loss vl
-	ON vl.location = ap.location 
+LEFT JOIN protected_areas pa
+	ON ap.location = pa.location
+    AND ap.year = pa.year
 LEFT JOIN elec_output eo
 	ON eo.location = ap.location 
     AND eo.year = ap.year
 LEFT JOIN env_pol ep
 	ON ep.location = ap.location 
     AND ep.year = ap.year
-    ORDER BY 2, 1
+WHERE ap.location IN ('AUS' , 'CAN' , 'FRA' , 'DEU' , 'ITA' , 'JPN' , 'MEX' ,'KOR','GBR','USA')
+ORDER BY 2, 1
     ),
 
 -- based on combined data, find yearly min and max value for each criteria
@@ -213,10 +198,8 @@ SELECT year,
  MAX(elec_output) AS elec_output_max,
  MIN(env_patents) AS env_patents_min,
  MAX(env_patents) AS env_patents_max,
- MIN(vege_gain) AS vege_gain_min,
- MAX(vege_gain) AS vege_gain_max,
- MIN(vege_loss) AS vege_loss_min,
- MAX(vege_loss) AS vege_loss_max
+ MIN(protected_areas) AS protected_areas_min,
+ MAX(protected_areas) AS protected_areas_max
 FROM combination com
 GROUP BY 1
 )
@@ -239,14 +222,10 @@ env_patents,
 env_patents_max,
 env_patents_min,
 (env_patents -env_patents_min) / (env_patents_max - env_patents_min) AS env_patents_index,
-vege_gain,
-vege_gain_max,
-vege_gain_min,
-(vege_gain - vege_gain_min) / (vege_gain_max - vege_gain_min) AS vege_gain_index,
-vege_loss,
-vege_loss_max,
-vege_loss_min,
-(vege_loss - vege_loss_min) / (vege_loss_max - vege_loss_min) AS vege_loss_index
+protected_areas,
+protected_areas_max,
+protected_areas_min,
+(protected_areas - protected_areas_min) / (protected_areas_max - protected_areas_min) AS protected_areas_index
 FROM combination c
 LEFT JOIN min_max mm
 	ON c.year = mm.year
@@ -259,9 +238,8 @@ SELECT location,
        ROUND(air_poll_mort_index,2) AS air_poll_mort_index,
        ROUND(elec_output_index,2) AS elec_output_index ,
        ROUND(env_patents_index,2) AS env_patents_index,
-       ROUND(vege_gain_index,2) AS vege_gain_index,
-       ROUND(vege_loss_index,2) AS vege_loss_index,
-	   ROUND((air_poll_mort_index + elec_output_index + env_patents_index + vege_gain_index + vege_loss_index) / 5 ,2) AS total_index
+       ROUND(protected_areas_index,2) AS protected_areas_index,
+	   ROUND((air_poll_mort_index + elec_output_index + env_patents_index + protected_areas_index ) / 4 ,2) AS total_index
 FROM final;
 
     
